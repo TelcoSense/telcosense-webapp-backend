@@ -6,14 +6,13 @@ from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import DeclarativeBase
 
-from backend.config import Config
+from backend.app_config import Config
+
+# class Base(DeclarativeBase):
+#     pass
 
 
-class Base(DeclarativeBase):
-    pass
-
-
-db = SQLAlchemy(model_class=Base)
+db = SQLAlchemy()
 bcrypt = Bcrypt()
 jwt = JWTManager()
 cors = CORS()
@@ -36,6 +35,8 @@ def create_app():
     migrate.init_app(app, db)
 
     from backend.auth import auth
+    from backend.mariadb import mariadb
 
     app.register_blueprint(auth)
+    app.register_blueprint(mariadb)
     return app

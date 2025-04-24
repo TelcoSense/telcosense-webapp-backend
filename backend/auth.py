@@ -27,10 +27,10 @@ def register_user(username):
     )
     db.session.add(new_user)
     db.session.commit()
-    if not os.path.exists("./pswd/"):
-        os.mkdir("./pswd/")
+    if not os.path.exists("./crd/"):
+        os.mkdir("./crd/")
 
-    with open(f"./pswd/{username}.txt", "w") as f:
+    with open(f"./crd/{username}.txt", "w") as f:
         f.write(generated_password)
 
 
