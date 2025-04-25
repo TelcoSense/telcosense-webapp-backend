@@ -1,3 +1,5 @@
+from math import atan2, cos, radians, sin, sqrt
+
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import current_user, jwt_required
 from sqlalchemy import select
@@ -30,6 +32,18 @@ def get_weather_stations():
             for station in stations
         ]
     )
+
+
+def haversine_meters(lat1, lon1, lat2, lon2):
+    dLat = radians(lat2 - lat1)
+    dLon = radians(lon2 - lon1)
+    a = (
+        sin(dLat / 2) ** 2
+        + cos(radians(lat1)) * cos(radians(lat2)) * sin(dLon / 2) ** 2
+    )
+    c = 2 * atan2(sqrt(a), sqrt(1 - a))
+    distance = 6371000 * c
+    return round(distance, 2)
 
 
 @mariadb.route("/links", methods=["GET"])
@@ -66,9 +80,16 @@ def links():
                 },
                 "technology": link.technology.name
                 or f"Technology {link.technology.id}",
+                "influx_mapping": link.technology.influx_mapping.measurement,
                 "polarization": link.polarization,
                 "frequency_A": link.frequency_A,
                 "frequency_B": link.frequency_B,
+                "length": haversine_meters(
+                    link.site_A.y_coordinate,
+                    link.site_A.x_coordinate,
+                    link.site_B.y_coordinate,
+                    link.site_B.x_coordinate,
+                ),
             }
             for link in links
         ]
