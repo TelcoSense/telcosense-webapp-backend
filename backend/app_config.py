@@ -4,6 +4,9 @@ from backend.db_config import (
     DB_CONNECTION_STRING_WS,
 )
 
+CHMI_IMG_API = "http://192.168.64.196:5001"
+TELCOSENSE_IMG_API = "http://192.168.64.154:5001"
+
 
 class Config:
     SQLALCHEMY_DATABASE_URI = DB_CONNECTION_STRING

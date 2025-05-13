@@ -4,13 +4,8 @@ from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy.orm import DeclarativeBase
 
 from backend.app_config import Config
-
-# class Base(DeclarativeBase):
-#     pass
-
 
 db = SQLAlchemy()
 bcrypt = Bcrypt()
@@ -35,8 +30,12 @@ def create_app():
     migrate.init_app(app, db)
 
     from backend.auth import auth
+    from backend.chmi_img import chmi_img
     from backend.mariadb import mariadb
+    from backend.telcosense_img import telcosense_img
 
     app.register_blueprint(auth)
+    app.register_blueprint(chmi_img)
     app.register_blueprint(mariadb)
+    app.register_blueprint(telcosense_img)
     return app

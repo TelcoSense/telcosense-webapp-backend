@@ -59,38 +59,44 @@ def links():
         .join(Link.technology)
         .where(Technology.influx_mapping_id.is_not(None))
     )
-    links = db.session.execute(query).scalars().all()
-    return jsonify(
-        [
-            {
-                "id": link.id,
-                "ip_address_A": link.ip_address_A,
-                "ip_address_B": link.ip_address_B,
-                "site_A": {
-                    "name": link.site_A.address or f"Site {link.site_A.id}",
-                    "x": link.site_A.x_coordinate,
-                    "y": link.site_A.y_coordinate,
-                    "altitude": link.site_A.altitude,
-                },
-                "site_B": {
-                    "name": link.site_B.address or f"Site {link.site_B.id}",
-                    "x": link.site_B.x_coordinate,
-                    "y": link.site_B.y_coordinate,
-                    "altitude": link.site_B.altitude,
-                },
-                "technology": link.technology.name
-                or f"Technology {link.technology.id}",
-                "influx_mapping": link.technology.influx_mapping.measurement,
-                "polarization": link.polarization,
-                "frequency_A": link.frequency_A,
-                "frequency_B": link.frequency_B,
-                "length": haversine_meters(
-                    link.site_A.y_coordinate,
-                    link.site_A.x_coordinate,
-                    link.site_B.y_coordinate,
-                    link.site_B.x_coordinate,
-                ),
-            }
-            for link in links
-        ]
-    )
+    user: User = current_user
+    # user must have an access to links
+    if user.link_access:
+        links = db.session.execute(query).scalars().all()
+        return jsonify(
+            [
+                {
+                    "id": link.id,
+                    "ip_address_A": link.ip_address_A,
+                    "ip_address_B": link.ip_address_B,
+                    "site_A": {
+                        "name": link.site_A.address or f"Site {link.site_A.id}",
+                        "x": link.site_A.x_coordinate,
+                        "y": link.site_A.y_coordinate,
+                        "altitude": link.site_A.altitude,
+                    },
+                    "site_B": {
+                        "name": link.site_B.address or f"Site {link.site_B.id}",
+                        "x": link.site_B.x_coordinate,
+                        "y": link.site_B.y_coordinate,
+                        "altitude": link.site_B.altitude,
+                    },
+                    "technology": link.technology.name
+                    or f"Technology {link.technology.id}",
+                    "influx_mapping": link.technology.influx_mapping.measurement,
+                    "polarization": link.polarization,
+                    "frequency_A": link.frequency_A,
+                    "frequency_B": link.frequency_B,
+                    "length": haversine_meters(
+                        link.site_A.y_coordinate,
+                        link.site_A.x_coordinate,
+                        link.site_B.y_coordinate,
+                        link.site_B.x_coordinate,
+                    ),
+                }
+                for link in links
+            ]
+        )
+    else:
+        # otherwise return empty list
+        return jsonify([])

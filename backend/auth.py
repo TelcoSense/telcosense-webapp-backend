@@ -1,5 +1,3 @@
-import os
-import secrets
 from datetime import datetime, timedelta, timezone
 
 from flask import Blueprint, jsonify, request
@@ -12,26 +10,10 @@ from flask_jwt_extended import (
     unset_jwt_cookies,
 )
 
-from backend import bcrypt, db, jwt
+from backend import bcrypt, jwt
 from backend.db_models import User
 
 auth = Blueprint("auth", __name__)
-
-
-def register_user(username):
-    generated_password = secrets.token_urlsafe(10)
-    hashed_password = bcrypt.generate_password_hash(generated_password).decode("utf-8")
-    new_user = User(
-        username=username,
-        password=hashed_password,
-    )
-    db.session.add(new_user)
-    db.session.commit()
-    if not os.path.exists("./crd/"):
-        os.mkdir("./crd/")
-
-    with open(f"./crd/{username}.txt", "w") as f:
-        f.write(generated_password)
 
 
 @auth.after_request
@@ -83,7 +65,9 @@ def login():
 @auth.route("/login-check", methods=["GET"])
 @jwt_required()
 def login_check():
-    return jsonify({"valid": True, "username": current_user.username})
+    return jsonify(
+        {"valid": True, "username": current_user.username, "org": current_user.org}
+    )
 
 
 @auth.route("/logout", methods=["POST"])
