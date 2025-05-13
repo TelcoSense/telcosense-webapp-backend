@@ -1,6 +1,6 @@
 from math import atan2, cos, radians, sin, sqrt
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify
 from flask_jwt_extended import current_user, jwt_required
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -13,7 +13,7 @@ from backend.db_models_ws import WeatherStation
 mariadb = Blueprint("mariadb", __name__)
 
 
-@mariadb.route("/weather-stations", methods=["GET"])
+@mariadb.route("/api/weather-stations", methods=["GET"])
 @jwt_required()
 def get_weather_stations():
     query = select(WeatherStation).join(WeatherStation.measurements_10m).distinct()
@@ -46,7 +46,7 @@ def haversine_meters(lat1, lon1, lat2, lon2):
     return round(distance, 2)
 
 
-@mariadb.route("/links", methods=["GET"])
+@mariadb.route("/api/links", methods=["GET"])
 @jwt_required()
 def links():
     query = (

@@ -43,7 +43,7 @@ def user_lookup_callback(_jwt_header, jwt_data):
     return User.query.filter_by(id=identity).one_or_none()
 
 
-@auth.route("/login", methods=["POST"])
+@auth.route("/api/login", methods=["POST"])
 def login():
     data = request.get_json()
     if not data or "username" not in data or "password" not in data:
@@ -62,7 +62,7 @@ def login():
         return jsonify({"message": "User does not exist"}), 404
 
 
-@auth.route("/login-check", methods=["GET"])
+@auth.route("/api/login-check", methods=["GET"])
 @jwt_required()
 def login_check():
     return jsonify(
@@ -70,7 +70,7 @@ def login_check():
     )
 
 
-@auth.route("/logout", methods=["POST"])
+@auth.route("/api/logout", methods=["POST"])
 def logout():
     response = jsonify({"message": "Logout successful"})
     unset_jwt_cookies(response)
