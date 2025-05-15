@@ -1,6 +1,6 @@
 from sqlalchemy import create_engine, text
 
-from backend.db_config import DB_SERVER_CONNECTION_STRING, db_name
+from backend.app_config import DB_SERVER_CONNECTION_STRING, db_name
 
 engine = create_engine(DB_SERVER_CONNECTION_STRING)
 with engine.connect() as conn:
