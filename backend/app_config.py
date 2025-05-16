@@ -23,6 +23,11 @@ DB_CONNECTION_STRING_CML = (
 CHMI_IMG_API = config["api"]["chmi_img_api"]
 TELCOSENSE_IMG_API = config["api"]["telcosense_img_api"]
 
+# influxdb config
+URL_PUBLIC = config["influxdb"]["url_public"]
+TOKEN_PUBLIC_READ = config["influxdb"]["token_public_read"]
+ORG = config["influxdb"]["org"]
+
 
 # flask app config
 class Config:

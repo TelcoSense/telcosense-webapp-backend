@@ -31,11 +31,13 @@ def create_app():
 
     from backend.auth import auth
     from backend.chmi_img import chmi_img
+    from backend.influxdb import influxdb
     from backend.mariadb import mariadb
     from backend.telcosense_img import telcosense_img
 
     app.register_blueprint(auth)
     app.register_blueprint(chmi_img)
+    app.register_blueprint(influxdb)
     app.register_blueprint(mariadb)
     app.register_blueprint(telcosense_img)
     return app
