@@ -26,6 +26,8 @@ TELCOSENSE_IMG_API = config["api"]["telcosense_img_api"]
 # influxdb config
 URL_PUBLIC = config["influxdb"]["url_public"]
 TOKEN_PUBLIC_READ = config["influxdb"]["token_public_read"]
+URL_INTERNAL = config["influxdb"]["url_internal"]
+TOKEN_INTERNAL_READ = config["influxdb"]["token_internal_read"]
 ORG = config["influxdb"]["org"]
 
 
