@@ -133,8 +133,7 @@ def cml_data():
                     if record.get_value() is not None
                     else None
                 )
-                result["rain_intensity_time"].append(record.get_time())
-
+                result["rain_intensity_time"].append(record.get_time().isoformat())
         # tsl and rsl second
         tables = client_internal.query_api().query(trsl_query)
         # summit (only rsl is used and since it is positive it is considered as trsl)
@@ -157,10 +156,8 @@ def cml_data():
                             if record.get_value() is not None
                             else None
                         )
-            trsl_a = np.round(np.array(trsl_a), 1)
-            trsl_b = np.round(np.array(trsl_b), 1)
-            result["trsl_a"] = [None if np.isnan(x) else float(x) for x in trsl_a]
-            result["trsl_b"] = [None if np.isnan(x) else float(x) for x in trsl_b]
+            result["trsl_a"] = trsl_a
+            result["trsl_b"] = trsl_b
         # special case for cmls with 4 channels
         elif (
             (tech == "ceragon_ip_10" and len(tables) == 8)
@@ -181,59 +178,51 @@ def cml_data():
                     if (
                         ip_a == record.values.get("agent_host")
                         and rsl_string == record.get_field()
-                        and record.values.get("interface-name")
-                        == "Radio: Slot 1, Port 1"
+                        and "Port 1" in record.values.get("interface-name")
                     ):
                         rsl_a.append(record.get_value())
                         time.append(record.get_time().isoformat())
                     elif (
                         ip_a == record.values.get("agent_host")
                         and tsl_string == record.get_field()
-                        and record.values.get("interface-name")
-                        == "Radio: Slot 1, Port 1"
+                        and "Port 1" in record.values.get("interface-name")
                     ):
                         tsl_a.append(record.get_value())
                     elif (
                         ip_a == record.values.get("agent_host")
                         and rsl_string == record.get_field()
-                        and record.values.get("interface-name")
-                        == "Radio: Slot 1, Port 2"
+                        and "Port 2" in record.values.get("interface-name")
                     ):
                         rsl_a2.append(record.get_value())
                     elif (
                         ip_a == record.values.get("agent_host")
                         and tsl_string == record.get_field()
-                        and record.values.get("interface-name")
-                        == "Radio: Slot 1, Port 2"
+                        and "Port 2" in record.values.get("interface-name")
                     ):
                         tsl_a2.append(record.get_value())
 
                     elif (
                         ip_b == record.values.get("agent_host")
                         and rsl_string == record.get_field()
-                        and record.values.get("interface-name")
-                        == "Radio: Slot 1, Port 1"
+                        and "Port 1" in record.values.get("interface-name")
                     ):
                         rsl_b.append(record.get_value())
                     elif (
                         ip_b == record.values.get("agent_host")
                         and tsl_string == record.get_field()
-                        and record.values.get("interface-name")
-                        == "Radio: Slot 1, Port 1"
+                        and "Port 1" in record.values.get("interface-name")
                     ):
                         tsl_b.append(record.get_value())
                     elif (
                         ip_b == record.values.get("agent_host")
                         and rsl_string == record.get_field()
-                        and record.values.get("interface-name")
-                        == "Radio: Slot 1, Port 2"
+                        and "Port 2" in record.values.get("interface-name")
                     ):
                         rsl_b2.append(record.get_value())
                     elif (
                         ip_b == record.values.get("agent_host")
                         and tsl_string == record.get_field()
-                        and record.values.get("interface-name")
-                        == "Radio: Slot 1, Port 2"
+                        and "Port 2" in record.values.get("interface-name")
                     ):
                         tsl_b2.append(record.get_value())
             trsl_a = np.round(
