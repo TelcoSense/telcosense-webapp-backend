@@ -1,4 +1,5 @@
 import configparser
+from datetime import timedelta
 
 config = configparser.ConfigParser()
 config.read("config.ini")
@@ -36,6 +37,7 @@ class Config:
     SQLALCHEMY_DATABASE_URI = DB_CONNECTION_STRING
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     JWT_SECRET_KEY = config["auth"]["jwt_secret_key"]
+    JWT_ACCESS_TOKEN_EXPIRES = timedelta(minutes=30)
     JWT_TOKEN_LOCATION = "cookies"
     JWT_COOKIE_SECURE = True
     SQLALCHEMY_BINDS = {"ws": DB_CONNECTION_STRING_WS, "cml": DB_CONNECTION_STRING_CML}

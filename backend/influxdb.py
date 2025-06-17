@@ -1,5 +1,6 @@
 import numpy as np
 from flask import Blueprint, jsonify, request
+from flask_jwt_extended import jwt_required
 from influxdb_client import InfluxDBClient
 
 from backend.app_config import (
@@ -17,6 +18,7 @@ client_internal = InfluxDBClient(url=URL_INTERNAL, token=TOKEN_INTERNAL_READ, or
 
 
 @influxdb.route("/api/wsdata", methods=["POST"])
+@jwt_required()
 def ws_data():
     data = request.get_json()
     start = data.get("start")
@@ -48,6 +50,7 @@ def ws_data():
 
 
 @influxdb.route("/api/cmldata", methods=["POST"])
+@jwt_required()
 def cml_data():
     data = request.get_json()
     start = data.get("start")
@@ -55,6 +58,7 @@ def cml_data():
     ip_a = data.get("ipA")
     ip_b = data.get("ipB")
     tech = data.get("tech")
+    cml_id = data.get("cmlId")
     if not start or not stop or not ip_a or not ip_b or not tech:
         return jsonify({"error": "Missing start, stop, ip, or tech"}), 400
     temp_query = f"""
@@ -65,6 +69,13 @@ def cml_data():
         |> filter(fn: (r) => r["agent_host"] == "{ip_a}" or r["agent_host"] == "{ip_b}")
         |> aggregateWindow(every: 10m, fn: mean)
         |> yield(name: "mean")
+        """.strip()
+    rain_intensity_query = f"""
+        from(bucket: "telcorain_output")
+        |> range(start: {start}, stop: {stop})
+        |> filter(fn: (r) => r["_measurement"] == "telcorain")
+        |> filter(fn: (r) => r["_field"] == "rain_intensity")
+        |> filter(fn: (r) => r["cml_id"] == "{cml_id}")
         """.strip()
     # define rsl and tsl queries for each tech
     if tech == "summit" or tech == "summit_bt":
@@ -91,15 +102,39 @@ def cml_data():
         |> yield(name: "mean")
         """.strip()
     try:
-        result = {"temp_a": [], "temp_b": []}
+        result = {
+            "temp_a": [],
+            "temp_b": [],
+            "rain_intensity": [],
+            "rain_intensity_time": [],
+        }
         # temperatures first
         tables = client_internal.query_api().query(temp_query)
         for table in tables:
             for record in table.records:
                 if ip_a == record.values.get("agent_host"):
-                    result["temp_a"].append(round(record.get_value(), 1))
+                    result["temp_a"].append(
+                        round(record.get_value(), 1)
+                        if record.get_value() is not None
+                        else None
+                    )
                 elif ip_b == record.values.get("agent_host"):
-                    result["temp_b"].append(round(record.get_value(), 1))
+                    result["temp_b"].append(
+                        round(record.get_value(), 1)
+                        if record.get_value() is not None
+                        else None
+                    )
+        # rain intensity
+        tables = client_internal.query_api().query(rain_intensity_query)
+        for table in tables:
+            for record in table.records:
+                result["rain_intensity"].append(
+                    round(record.get_value(), 1)
+                    if record.get_value() is not None
+                    else None
+                )
+                result["rain_intensity_time"].append(record.get_time())
+
         # tsl and rsl second
         tables = client_internal.query_api().query(trsl_query)
         # summit (only rsl is used and since it is positive it is considered as trsl)
@@ -110,10 +145,18 @@ def cml_data():
             for table in tables:
                 for record in table.records:
                     if ip_a == record.values.get("agent_host"):
-                        trsl_a.append(round(record.get_value(), 1))
+                        trsl_a.append(
+                            round(record.get_value(), 1)
+                            if record.get_value() is not None
+                            else None
+                        )
                         result["time"].append(record.get_time().isoformat())
                     elif ip_b == record.values.get("agent_host"):
-                        trsl_b.append(round(record.get_value(), 1))
+                        trsl_b.append(
+                            round(record.get_value(), 1)
+                            if record.get_value() is not None
+                            else None
+                        )
             trsl_a = np.round(np.array(trsl_a), 1)
             trsl_b = np.round(np.array(trsl_b), 1)
             result["trsl_a"] = [None if np.isnan(x) else float(x) for x in trsl_a]
@@ -253,4 +296,5 @@ def cml_data():
             result["time"] = time
         return jsonify(result)
     except Exception as e:
+        print(e)
         return jsonify({"error": str(e)}), 500

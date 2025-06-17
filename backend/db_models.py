@@ -12,3 +12,7 @@ class User(db.Model):
 
     org: Mapped[str] = mapped_column(String(10), nullable=False, default="BUT")
     link_access: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+
+# class HistoricCalculation(db.Model):
+#     __tablename__ = "historic_calculations"

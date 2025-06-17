@@ -1,5 +1,6 @@
 import requests
 from flask import Blueprint, Response, jsonify, request
+from flask_jwt_extended import jwt_required
 
 from backend.app_config import TELCOSENSE_IMG_API
 
@@ -7,6 +8,7 @@ telcosense_img = Blueprint("telcosense_img", __name__)
 
 
 @telcosense_img.route("/api/raincz/list")
+@jwt_required()
 def proxy_raincz_list():
     try:
         res = requests.get(f"{TELCOSENSE_IMG_API}/api/raincz/list", params=request.args)
@@ -16,6 +18,7 @@ def proxy_raincz_list():
 
 
 @telcosense_img.route("/api/raincz/<path:filename>")
+@jwt_required()
 def proxy_raincz_file(filename):
     try:
         res = requests.get(f"{TELCOSENSE_IMG_API}/api/raincz/{filename}", stream=True)

@@ -16,22 +16,6 @@ from backend.db_models import User
 auth = Blueprint("auth", __name__)
 
 
-@auth.after_request
-def refresh_expiring_jwts(response):
-    try:
-        exp_timestamp = get_jwt()["exp"]
-        now = datetime.now(tz=timezone.utc)
-        target_timestamp = datetime.timestamp(now + timedelta(minutes=10))
-        if target_timestamp > exp_timestamp:
-            access_token = create_access_token(
-                identity=current_user, expires_delta=timedelta(minutes=20)
-            )
-            set_access_cookies(response, access_token)
-        return response
-    except (RuntimeError, KeyError):
-        return response
-
-
 @jwt.user_identity_loader
 def user_identity_lookup(user):
     return str(user.id)
@@ -65,9 +49,22 @@ def login():
 @auth.route("/api/login-check", methods=["GET"])
 @jwt_required()
 def login_check():
+    jwt_data = get_jwt()
     return jsonify(
-        {"valid": True, "username": current_user.username, "org": current_user.org}
+        {
+            "valid": True,
+            "username": current_user.username,
+            "org": current_user.org,
+            "exp": jwt_data["exp"],
+        }
     )
+
+
+@auth.route("/api/token-info", methods=["GET"])
+@jwt_required()
+def token_info():
+    jwt_data = get_jwt()
+    return jsonify({"exp": jwt_data["exp"]})
 
 
 @auth.route("/api/logout", methods=["POST"])

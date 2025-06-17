@@ -1,7 +1,17 @@
-from flask import Flask
+from datetime import datetime, timedelta, timezone
+
+from flask import Flask, request
 from flask_bcrypt import Bcrypt
 from flask_cors import CORS
-from flask_jwt_extended import JWTManager
+from flask_jwt_extended import (
+    JWTManager,
+    create_access_token,
+    current_user,
+    get_jwt,
+    jwt_required,
+    set_access_cookies,
+    unset_jwt_cookies,
+)
 from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
 
@@ -40,4 +50,23 @@ def create_app():
     app.register_blueprint(influxdb)
     app.register_blueprint(mariadb)
     app.register_blueprint(telcosense_img)
+
+    @app.after_request
+    def refresh_expiring_jwts(response):
+        try:
+            # only refresh if the current request had a valid JWT
+            _ = get_jwt()  # Will raise RuntimeError if no valid JWT in request
+            # skip refresh for specific paths if desired
+            if request.path == "/api/login-check":
+                return response
+            # always refresh: issue a new token that expires in 30 minutes from now
+            access_token = create_access_token(
+                identity=current_user, expires_delta=timedelta(minutes=30)
+            )
+            set_access_cookies(response, access_token)
+        except (RuntimeError, KeyError):
+            # no valid JWT present, skip refreshing
+            pass
+        return response
+
     return app
