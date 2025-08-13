@@ -8,7 +8,7 @@ from sqlalchemy.orm import selectinload
 from backend import db
 from backend.db_models import User
 from backend.db_models_cml import Link, Technology
-from backend.db_models_ws import WeatherStation
+from backend.db_models_ws import WeatherStation, WeatherStationMeasurement10M
 
 mariadb = Blueprint("mariadb", __name__)
 
@@ -16,8 +16,13 @@ mariadb = Blueprint("mariadb", __name__)
 @mariadb.route("/api/weather-stations", methods=["GET"])
 @jwt_required()
 def get_weather_stations():
-    query = select(WeatherStation).join(WeatherStation.measurements_10m).distinct()
+    query = select(WeatherStation).options(
+        selectinload(WeatherStation.measurements_10m).selectinload(
+            WeatherStationMeasurement10M.measurement_10m
+        )
+    )
     stations = db.session.execute(query).scalars().all()
+
     return jsonify(
         [
             {
@@ -28,8 +33,14 @@ def get_weather_stations():
                 "X": station.X,
                 "Y": station.Y,
                 "elevation": station.elevation,
+                "measurements": [
+                    m.measurement_10m.abbreviation
+                    for m in station.measurements_10m
+                    if m.measurement_10m
+                ],
             }
             for station in stations
+            if any(m.measurement_10m for m in station.measurements_10m)
         ]
     )
 
