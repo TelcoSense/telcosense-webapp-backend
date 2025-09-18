@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 
 from flask import Flask, request
 from flask_bcrypt import Bcrypt
@@ -8,9 +8,7 @@ from flask_jwt_extended import (
     create_access_token,
     current_user,
     get_jwt,
-    jwt_required,
     set_access_cookies,
-    unset_jwt_cookies,
 )
 from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
@@ -41,6 +39,7 @@ def create_app():
 
     from backend.auth import auth
     from backend.chmi_img import chmi_img
+    from backend.historic import historic
     from backend.influxdb import influxdb
     from backend.mariadb import mariadb
     from backend.telcosense_img import telcosense_img
@@ -50,6 +49,7 @@ def create_app():
     app.register_blueprint(influxdb)
     app.register_blueprint(mariadb)
     app.register_blueprint(telcosense_img)
+    app.register_blueprint(historic)
 
     @app.after_request
     def refresh_expiring_jwts(response):
