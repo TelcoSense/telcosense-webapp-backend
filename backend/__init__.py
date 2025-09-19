@@ -14,6 +14,7 @@ from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
 
 from backend.app_config import Config
+from backend.celery_utils import make_celery
 
 db = SQLAlchemy()
 bcrypt = Bcrypt()
@@ -36,6 +37,9 @@ def create_app():
     )
     # db migrations
     migrate.init_app(app, db)
+
+    celery = make_celery(app)
+    celery.set_default()
 
     from backend.auth import auth
     from backend.chmi_img import chmi_img
@@ -69,4 +73,4 @@ def create_app():
             pass
         return response
 
-    return app
+    return app, celery

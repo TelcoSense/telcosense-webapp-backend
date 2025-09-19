@@ -8,12 +8,12 @@ from backend.tasks import run_rain_calculation
 historic = Blueprint("historic", __name__)
 
 
-@historic.route("/start-rain-calculation", methods=["POST"])
+@historic.route("/api/start-rain-calculation", methods=["POST"])
 @jwt_required()
-def start_calculation():
+def start_rain_calculation():
     data = request.get_json()
     user_id = current_user.id
-    name = data["name"]
+    name = data.get("name", "").strip()
 
     # enforce limit
     active_jobs = (
@@ -36,9 +36,9 @@ def start_calculation():
     return jsonify({"message": "Calculation started", "calculation_id": calc.id})
 
 
-@historic.route("/rain-calculations", methods=["GET"])
+@historic.route("/api/rain-calculations", methods=["GET"])
 @jwt_required()
-def list_calculations():
+def list_rain_calculations():
     user_id = current_user.id
     calcs = (
         Calculation.query.filter_by(user_id=user_id)
