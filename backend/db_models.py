@@ -3,7 +3,7 @@ from enum import Enum
 
 from sqlalchemy import Boolean, DateTime
 from sqlalchemy import Enum as SqlEnum
-from sqlalchemy import ForeignKey, Integer, String, Text
+from sqlalchemy import Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend import db
@@ -42,14 +42,13 @@ class Calculation(db.Model):
     status: Mapped[CalcStatus] = mapped_column(
         SqlEnum(CalcStatus), nullable=False, default=CalcStatus.PENDING
     )
+
     result: Mapped[str | None] = mapped_column(Text, nullable=True)
+    elapsed: Mapped[float | None] = mapped_column(Float, nullable=True)
+    shared: Mapped[bool] = mapped_column(Boolean, default=False)
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.now(timezone.utc)
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime,
-        default=datetime.now(timezone.utc),
-        onupdate=datetime.now(timezone.utc),
     )
 
     user: Mapped["User"] = relationship("User", back_populates="calculations")

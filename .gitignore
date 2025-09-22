@@ -2,6 +2,7 @@ config.ini
 
 .vscode/
 migrations/
+telcorain/
 crd/
 
 *.pyc

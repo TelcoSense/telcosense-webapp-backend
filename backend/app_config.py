@@ -31,6 +31,11 @@ URL_INTERNAL = config["influxdb"]["url_internal"]
 TOKEN_INTERNAL_READ = config["influxdb"]["token_internal_read"]
 ORG = config["influxdb"]["org"]
 
+# paths for telcorain historic calcs
+TELCORAIN_REPO_PATH = config["telcorain"]["telcorain_repo_path"]
+TELCORAIN_ENV_PATH = config["telcorain"]["telcorain_env_path"]
+TELCORAIN_OUT_PATH = config["telcorain"]["telcorain_out_path"]
+
 
 # flask app config
 class Config:
