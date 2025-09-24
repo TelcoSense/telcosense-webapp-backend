@@ -26,7 +26,7 @@ def run_rain_calculation(calc_id, cp: dict):
             [
                 TELCORAIN_ENV_PATH,
                 f"{TELCORAIN_REPO_PATH}/run.py",
-                "--config",
+                "--cp",
                 cp_json,
             ],
             capture_output=True,
