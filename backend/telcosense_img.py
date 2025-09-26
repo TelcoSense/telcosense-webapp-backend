@@ -7,21 +7,31 @@ from backend.app_config import TELCOSENSE_IMG_API
 telcosense_img = Blueprint("telcosense_img", __name__)
 
 
-@telcosense_img.route("/api/raincz/list")
-@jwt_required()
-def proxy_raincz_list():
+# helper for proxying JSON list
+def proxy_list_request(datatype: str):
     try:
-        res = requests.get(f"{TELCOSENSE_IMG_API}/api/raincz/list", params=request.args)
+        res = requests.get(
+            f"{TELCOSENSE_IMG_API}/api/{datatype}/list",
+            params=request.args,
+            timeout=10,
+        )
+        res.raise_for_status()
         return jsonify(res.json())
     except requests.exceptions.RequestException as e:
-        return jsonify({"error": "Failed to fetch raincz list", "details": str(e)}), 502
+        return (
+            jsonify({"error": f"Failed to fetch {datatype} list", "details": str(e)}),
+            502,
+        )
 
 
-@telcosense_img.route("/api/raincz/<path:filename>")
-@jwt_required()
-def proxy_raincz_file(filename):
+# helper for proxying image files
+def proxy_file_request(datatype: str, filename: str):
     try:
-        res = requests.get(f"{TELCOSENSE_IMG_API}/api/raincz/{filename}", stream=True)
+        res = requests.get(
+            f"{TELCOSENSE_IMG_API}/api/{datatype}/{filename}",
+            stream=True,
+            timeout=10,
+        )
         return Response(
             res.iter_content(chunk_size=4096),
             content_type=res.headers.get("Content-Type", "image/png"),
@@ -29,33 +39,19 @@ def proxy_raincz_file(filename):
         )
     except requests.exceptions.RequestException as e:
         return (
-            jsonify({"error": "Failed to fetch raincz image", "details": str(e)}),
+            jsonify({"error": f"Failed to fetch {datatype} image", "details": str(e)}),
             502,
         )
 
 
-@telcosense_img.route("/api/tempcz/list")
+# generic routes
+@telcosense_img.route("/api/<datatype>/list")
 @jwt_required()
-def proxy_tempcz_list():
-    try:
-        res = requests.get(f"{TELCOSENSE_IMG_API}/api/tempcz/list", params=request.args)
-        return jsonify(res.json())
-    except requests.exceptions.RequestException as e:
-        return jsonify({"error": "Failed to fetch tempcz list", "details": str(e)}), 502
+def proxy_list(datatype):
+    return proxy_list_request(datatype)
 
 
-@telcosense_img.route("/api/tempcz/<path:filename>")
+@telcosense_img.route("/api/<datatype>/<path:filename>")
 @jwt_required()
-def proxy_tempcz_file(filename):
-    try:
-        res = requests.get(f"{TELCOSENSE_IMG_API}/api/tempcz/{filename}", stream=True)
-        return Response(
-            res.iter_content(chunk_size=4096),
-            content_type=res.headers.get("Content-Type", "image/png"),
-            status=res.status_code,
-        )
-    except requests.exceptions.RequestException as e:
-        return (
-            jsonify({"error": "Failed to fetch tempcz image", "details": str(e)}),
-            502,
-        )
+def proxy_file(datatype, filename):
+    return proxy_file_request(datatype, filename)

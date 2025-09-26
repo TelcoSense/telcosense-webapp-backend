@@ -1,4 +1,7 @@
+from time import time as timer
+
 import numpy as np
+import pandas as pd
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required
 from influxdb_client import InfluxDBClient
@@ -77,6 +80,15 @@ def cml_data():
         |> filter(fn: (r) => r["_field"] == "rain_intensity")
         |> filter(fn: (r) => r["cml_id"] == "{cml_id}")
         """.strip()
+    temp_pred_query = f"""
+        from(bucket: "telcorain_output")
+        |> range(start: {start}, stop: {stop})
+        |> filter(fn: (r) => r["_measurement"] == "telcotemp")
+        |> filter(fn: (r) => r["_field"] == "temperature")
+        |> filter(fn: (r) => r["cml_id"] == "{cml_id}")
+        |> filter(fn: (r) => r["side"] == "A" or r["side"] == "B")
+        |> pivot(rowKey:["_time"], columnKey: ["side"], valueColumn: "_value")
+        """.strip()
     # define rsl and tsl queries for each tech
     if tech == "summit" or tech == "summit_bt":
         filter_string = f"""|> filter(fn: (r) => r["_field"] == "PrijimanaUroven")"""
@@ -107,6 +119,9 @@ def cml_data():
             "temp_b": [],
             "rain_intensity": [],
             "rain_intensity_time": [],
+            "temp_pred_a": [],
+            "temp_pred_b": [],
+            "temp_pred_time": [],
         }
         # temperatures first
         tables = client_internal.query_api().query(temp_query)
@@ -134,6 +149,18 @@ def cml_data():
                     else None
                 )
                 result["rain_intensity_time"].append(record.get_time().isoformat())
+        # temp pred
+
+        df = client_internal.query_api().query_data_frame(temp_pred_query)
+        if not df.empty:
+            result["temp_pred_time"] = [t.isoformat() for t in df["_time"]]
+            result["temp_pred_a"] = [
+                float(round(v, 1)) if v is not None else None for v in df["A"]
+            ]
+            result["temp_pred_b"] = [
+                float(round(v, 1)) if v is not None else None for v in df["B"]
+            ]
+
         # tsl and rsl second
         tables = client_internal.query_api().query(trsl_query)
         # summit (only rsl is used and since it is positive it is considered as trsl)

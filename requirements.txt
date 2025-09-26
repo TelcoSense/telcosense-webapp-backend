@@ -10,3 +10,4 @@ influxdb-client==1.48.0
 numpy==2.2.6
 celery==5.5.3
 redis==6.4.0
+pandas==2.3.2
