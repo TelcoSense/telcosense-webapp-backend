@@ -16,6 +16,6 @@ def register_user(username: str, org: str, link_access: bool):
     print(generated_password)
 
 
-app = create_app()
+app, celery = create_app()
 with app.app_context():
     register_user()
