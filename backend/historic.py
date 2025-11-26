@@ -103,7 +103,7 @@ def start_rain_calculation():
         "user_info": {
             "folder_name": data["name"],
             "links_id": payload["links_id"],
-            "output_dir": f"{TELCORAIN_OUT_PATH}/{user_id}/{data["name"]}",
+            "output_dir": f"{TELCORAIN_OUT_PATH}/{user_id}/{data['name']}",
         },
         "rendering": {
             "is_crop_enabled": data["is_crop_enabled"],
