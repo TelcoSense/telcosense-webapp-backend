@@ -10,7 +10,7 @@ from backend.db_models import CalcStatus, Calculation
 
 
 @shared_task()
-def run_rain_calculation(calc_id, cp: dict):
+def run_rain_calculation(calc_id, cfg: dict):
     calc = db.session.get(Calculation, calc_id)
     if not calc:
         return
@@ -18,26 +18,24 @@ def run_rain_calculation(calc_id, cp: dict):
     try:
         calc.status = CalcStatus.RUNNING
         db.session.commit()
-
-        cp_json = json.dumps(cp)
-
+        # convert config to json
+        cfg_json = json.dumps(cfg)
+        # run the subprocess
         t1 = time()
         result = subprocess.run(
             [
                 TELCORAIN_ENV_PATH,
-                f"{TELCORAIN_REPO_PATH}/run.py",
-                "--cp",
-                cp_json,
+                f"{TELCORAIN_REPO_PATH}/run_web.py",
+                "--cfg",
+                cfg_json,
             ],
             capture_output=True,
             text=True,
             cwd=TELCORAIN_REPO_PATH,
         )
         t2 = time()
-
         if result.returncode != 0:
             raise RuntimeError(f"Subprocess error:\n{result.stderr}")
-
         calc.status = CalcStatus.FINISHED
         calc.result = f"Finished calculation {calc.name}"
         calc.elapsed = t2 - t1

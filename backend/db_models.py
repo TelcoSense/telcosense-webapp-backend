@@ -54,10 +54,5 @@ class Calculation(db.Model):
     start: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     end: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
-    x_min: Mapped[float] = mapped_column(Float, nullable=False)
-    x_max: Mapped[float] = mapped_column(Float, nullable=False)
-    y_min: Mapped[float] = mapped_column(Float, nullable=False)
-    y_max: Mapped[float] = mapped_column(Float, nullable=False)
-
     user: Mapped["User"] = relationship("User", back_populates="calculations")
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)

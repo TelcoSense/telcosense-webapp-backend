@@ -51,20 +51,16 @@ def start_rain_calculation():
         created_at=datetime.now(timezone.utc),
         start=datetime.fromisoformat(start.replace("Z", "+00:00")),
         end=datetime.fromisoformat(end.replace("Z", "+00:00")),
-        x_min=data["x_min"],
-        x_max=data["x_max"],
-        y_min=data["y_min"],
-        y_max=data["y_max"],
     )
 
     db.session.add(calc)
     db.session.commit()
 
-    cp = {
-        # time setting (probably dont change step and output_step)
+    cfg = {
+        # time settings
         "time": {
-            "step": 10,
-            "output_step": 10,
+            "step": data["step"],
+            "output_step": data["output_step"],
             "start": start,
             "end": end,
         },
@@ -72,48 +68,33 @@ def start_rain_calculation():
         "cml": {
             "min_length": data["min_length"],
             "max_length": data["max_length"],
+            # manual filtration using the csv in the telcorain repo
+            "exclude_cmls": data["exclude_cmls"],
         },
-        # db settings for historic calculation
-        "historic": {
-            "skip_influx": True,
+        # user info for folder names and link selection (list of IDs)
+        "user_info": {
+            "links_id": payload["links_id"],
+            "output_dir": f"{TELCORAIN_OUT_PATH}/{user_id}/{data['name']}",
         },
         "wet_dry": {
             "is_mlp_enabled": data["is_mlp_enabled"],
-            "cnn_model": "ours",
-            "cnn_model_name": "cnn_v22_ds_cz_param_2025-05-15_22;01",
             "rolling_hours": data["rolling_hours"],
             "rolling_values": data["rolling_values"],
             "wet_dry_deviation": data["wet_dry_deviation"],
             "baseline_samples": data["baseline_samples"],
-            "is_window_centered": False,
         },
         "interp": {
-            "interp_res": data["interp_res"],
             "idw_power": data["idw_power"],
             "idw_near": data["idw_near"],
-            "idw_dist": data["idw_dist"],
-        },
-        "limits": {
-            "x_min": data["x_min"],
-            "x_max": data["x_max"],
-            "y_min": data["y_min"],
-            "y_max": data["y_max"],
-        },
-        # user info for folder names and link selection (list of IDs)
-        "user_info": {
-            "folder_name": data["name"],
-            "links_id": payload["links_id"],
-            "output_dir": f"{TELCORAIN_OUT_PATH}/{user_id}/{data['name']}",
+            "idw_dist_m": data["idw_dist_m"],
         },
         "rendering": {
             "is_crop_enabled": data["is_crop_enabled"],
-            "geojson_file": "czechia.json",
-            "map": "plain_czechia.png",
         },
     }
 
     # send to background worker via celery
-    run_rain_calculation.delay(calc.id, cp)
+    run_rain_calculation.delay(calc.id, cfg)
 
     return jsonify({"message": "Calculation started", "calculation_id": calc.id})
 
@@ -140,10 +121,6 @@ def list_rain_calculations():
                 "created_at": c.created_at.replace(tzinfo=timezone.utc).isoformat(),
                 "start": c.start.replace(tzinfo=timezone.utc).isoformat(),
                 "end": c.end.replace(tzinfo=timezone.utc).isoformat(),
-                "x_min": c.x_min,
-                "x_max": c.x_max,
-                "y_min": c.y_min,
-                "y_max": c.y_max,
             }
             for c in calcs
         ]
