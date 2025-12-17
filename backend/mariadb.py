@@ -57,6 +57,10 @@ def haversine_meters(lat1, lon1, lat2, lon2):
     return round(distance, 2)
 
 
+def midpoint_xy(x1, y1, x2, y2):
+    return round((x1 + x2) / 2, 7), round((y1 + y2) / 2, 7)
+
+
 @mariadb.route("/api/links", methods=["GET"])
 @jwt_required()
 def links():
@@ -103,6 +107,12 @@ def links():
                         link.site_A.x_coordinate,
                         link.site_B.y_coordinate,
                         link.site_B.x_coordinate,
+                    ),
+                    "center_x": round(
+                        (link.site_A.x_coordinate + link.site_B.x_coordinate) / 2, 7
+                    ),
+                    "center_y": round(
+                        (link.site_A.y_coordinate + link.site_B.y_coordinate) / 2, 7
                     ),
                 }
                 for link in links
