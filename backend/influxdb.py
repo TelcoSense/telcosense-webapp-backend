@@ -21,7 +21,7 @@ client_internal = InfluxDBClient(url=URL_INTERNAL, token=TOKEN_INTERNAL_READ, or
 
 
 @influxdb.route("/api/wsdata", methods=["POST"])
-@jwt_required()
+# @jwt_required()
 def ws_data():
     data = request.get_json()
     start = data.get("start")

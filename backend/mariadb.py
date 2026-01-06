@@ -14,7 +14,7 @@ mariadb = Blueprint("mariadb", __name__)
 
 
 @mariadb.route("/api/weather-stations", methods=["GET"])
-@jwt_required()
+# @jwt_required()
 def get_weather_stations():
     query = select(WeatherStation).options(
         selectinload(WeatherStation.measurements_10m).selectinload(

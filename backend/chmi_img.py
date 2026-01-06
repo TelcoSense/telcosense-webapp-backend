@@ -8,7 +8,7 @@ chmi_img = Blueprint("chmi_img", __name__)
 
 
 @chmi_img.route("/api/maxz/list")
-@jwt_required()
+# @jwt_required()
 def proxy_maxz_list():
     try:
         res = requests.get(f"{CHMI_IMG_API}/api/maxz/list", params=request.args)
@@ -18,7 +18,7 @@ def proxy_maxz_list():
 
 
 @chmi_img.route("/api/maxz/<path:filename>")
-@jwt_required()
+# @jwt_required()
 def proxy_maxz_file(filename):
     try:
         res = requests.get(f"{CHMI_IMG_API}/api/maxz/{filename}", stream=True)
@@ -32,7 +32,7 @@ def proxy_maxz_file(filename):
 
 
 @chmi_img.route("/api/merge1h/list")
-@jwt_required()
+# @jwt_required()
 def proxy_merge1h_list():
     try:
         res = requests.get(f"{CHMI_IMG_API}/api/merge1h/list", params=request.args)
@@ -45,7 +45,7 @@ def proxy_merge1h_list():
 
 
 @chmi_img.route("/api/merge1h/<path:filename>")
-@jwt_required()
+# @jwt_required()
 def proxy_merge1h_file(filename):
     try:
         res = requests.get(f"{CHMI_IMG_API}/api/merge1h/{filename}", stream=True)

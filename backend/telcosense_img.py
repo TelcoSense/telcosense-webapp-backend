@@ -46,12 +46,34 @@ def proxy_file_request(datatype: str, filename: str):
 
 # generic routes
 @telcosense_img.route("/api/<datatype>/list")
-@jwt_required()
+# @jwt_required()
 def proxy_list(datatype):
     return proxy_list_request(datatype)
 
 
 @telcosense_img.route("/api/<datatype>/<path:filename>")
-@jwt_required()
+# @jwt_required()
 def proxy_file(datatype, filename):
     return proxy_file_request(datatype, filename)
+
+
+def proxy_drywet_request():
+    try:
+        res = requests.get(
+            f"{TELCOSENSE_IMG_API}/api/drywet",
+            params=request.args,  # forwards start/end (and anything else)
+            timeout=10,
+        )
+        res.raise_for_status()
+        return jsonify(res.json())
+    except requests.exceptions.RequestException as e:
+        return (
+            jsonify({"error": "Failed to fetch drywet list", "details": str(e)}),
+            502,
+        )
+
+
+@telcosense_img.route("/api/drywet", methods=["GET"])
+@jwt_required()
+def proxy_drywet():
+    return proxy_drywet_request()
