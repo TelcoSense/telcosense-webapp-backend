@@ -15,9 +15,31 @@ from backend.app_config import (
 )
 from backend.db_models import CalcStatus, Calculation
 from backend.tasks import run_rain_calculation
-from backend.utils import extract_timestamp, parse_isoformat_z
+from backend.utils import extract_timestamp_and_score, parse_isoformat_z
 
 historic = Blueprint("historic", __name__)
+
+TELCORAIN_BASE_DIR = Path("./telcorain").resolve()
+
+
+def _user_base_dir(user_id: int) -> Path:
+    return (TELCORAIN_BASE_DIR / str(user_id)).resolve()
+
+
+def _safe_calc_dir_for_user(user_id: int, calc_name: str) -> Path:
+    """
+    Returns a resolved path like <base>/<user_id>/<calc_name> and guarantees it
+    cannot escape <base>/<user_id>/ (prevents path traversal / weird names).
+    """
+    user_dir = _user_base_dir(user_id)
+    calc_dir = (user_dir / calc_name).resolve()
+
+    # Require calc_dir to be within user_dir (strict prefix with path separator)
+    user_prefix = str(user_dir) + os.sep
+    if not str(calc_dir).startswith(user_prefix):
+        abort(400, "Invalid calculation path")
+
+    return calc_dir
 
 
 @historic.route("/api/start-rain-calculation", methods=["POST"])
@@ -136,35 +158,35 @@ def list_rain_calculations():
 @jwt_required()
 def delete_rain_calculation(calc_id: int):
     user_id = current_user.id
-    calc = Calculation.query.filter_by(id=calc_id, user_id=user_id).first()
 
+    calc = Calculation.query.filter_by(id=calc_id, user_id=user_id).first()
     if not calc:
         return jsonify({"error": "Calculation not found"}), 404
 
-    # prevent deleting active jobs, enforce here:
-    if calc.status in [CalcStatus.PENDING, CalcStatus.RUNNING]:
+    # prevent deleting active jobs
+    if calc.status in (CalcStatus.PENDING, CalcStatus.RUNNING):
         return jsonify({"error": "Cannot delete an active calculation"}), 400
 
-    folder_path = f"./telcorain/{user_id}/{calc.name}"
-    # also remove folder with images
+    # Build folder path safely from DB value (calc.name)
+    calc_dir = _safe_calc_dir_for_user(user_id, calc.name)
 
-    if os.path.exists(folder_path) and os.path.isdir(folder_path):
-        shutil.rmtree(folder_path)
+    # Remove folder with images (if present)
+    if calc_dir.exists() and calc_dir.is_dir():
+        shutil.rmtree(calc_dir)
 
     db.session.delete(calc)
     db.session.commit()
 
-    return jsonify({"message": "Calculation deleted", "calculation_id": calc_id})
+    return jsonify({"message": "Calculation deleted", "calculation_id": calc_id}), 200
 
 
 @historic.route("/api/historic/<string:calc_name>/list", methods=["GET"])
 @jwt_required()
-def historic_list(calc_name):
+def historic_list(calc_name: str):
     user_id = current_user.id
 
     start_str = request.args.get("start")
     end_str = request.args.get("end")
-
     if not start_str or not end_str:
         abort(400, "'start' and 'end' query parameters are required (ISO format)")
 
@@ -174,44 +196,69 @@ def historic_list(calc_name):
     except ValueError:
         abort(400, "Invalid ISO datetime format")
 
-    # Lookup calculation by name + user_id
+    if start_dt > end_dt:
+        abort(400, "'start' must be <= 'end'")
+
+    # Lookup calculation by name + user_id (authz)
     calc = Calculation.query.filter_by(user_id=user_id, name=calc_name).first()
     if not calc:
         abort(404, f"No calculation found for name={calc_name}")
 
-    calc_dir = Path(f"./telcorain/{user_id}/{calc_name}")
-    if not calc_dir.exists():
-        abort(404, f"No files found for calculation '{calc_name}'")
+    # Use DB calc.name as truth for path
+    calc_dir = _safe_calc_dir_for_user(user_id, calc.name)
+    if not calc_dir.exists() or not calc_dir.is_dir():
+        abort(404, f"No files found for calculation '{calc.name}'")
 
     results = []
     for file_path in sorted(calc_dir.glob("*.png")):
         try:
-            ts = extract_timestamp(file_path.name)
-            if start_dt <= ts <= end_dt:
-                results.append(
-                    {
-                        "timestamp": ts.isoformat(),
-                        "url": f"/historic/{user_id}/{calc_name}/{file_path.name}",
-                    }
-                )
+            ts, score = extract_timestamp_and_score(file_path.name)
         except ValueError:
             continue
 
-    return jsonify(results)
+        if start_dt <= ts <= end_dt:
+            results.append(
+                {
+                    "timestamp": ts.isoformat(),
+                    # NOTE: matches the route below (has /api)
+                    "url": f"/historic/{user_id}/{calc.name}/{file_path.name}",
+                    "rain_score": score,
+                }
+            )
+
+    return jsonify(results), 200
 
 
 @historic.route("/api/historic/<int:user_id>/<string:calc_name>/<path:filename>")
-def historic_file(user_id, calc_name, filename):
-    base_dir = Path("./telcorain").resolve()
-    requested_path = (base_dir / str(user_id) / calc_name / filename).resolve()
-
-    # Prevent path traversal
-    if not str(requested_path).startswith(str(base_dir)):
+@jwt_required()
+def historic_file(user_id: int, calc_name: str, filename: str):
+    # IDOR prevention: only allow requesting your own user_id
+    if user_id != current_user.id:
         abort(403)
 
-    if not requested_path.exists():
+    # Ensure calc_name actually belongs to this user (prevents probing disk)
+    calc = Calculation.query.filter_by(user_id=user_id, name=calc_name).first()
+    if not calc:
+        abort(404)
+
+    # Build base calc dir safely from DB calc.name
+    calc_dir = _safe_calc_dir_for_user(user_id, calc.name)
+
+    # Resolve requested file path and ensure it stays inside calc_dir
+    requested_path = (calc_dir / filename).resolve()
+    calc_prefix = str(calc_dir) + os.sep
+    if not str(requested_path).startswith(calc_prefix):
+        abort(403)
+
+    if not requested_path.exists() or not requested_path.is_file():
+        abort(404)
+
+    # (optional) enforce PNG only
+    if requested_path.suffix.lower() != ".png":
         abort(404)
 
     return send_from_directory(
-        directory=requested_path.parent, path=requested_path.name, mimetype="image/png"
+        directory=str(requested_path.parent),
+        path=requested_path.name,
+        mimetype="image/png",
     )
