@@ -3,6 +3,7 @@ config.ini
 .vscode/
 migrations/
 telcorain/
+telcorain_json/
 crd/
 
 *.pyc

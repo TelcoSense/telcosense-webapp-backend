@@ -8,7 +8,11 @@ from flask import Blueprint, abort, jsonify, request, send_from_directory
 from flask_jwt_extended import current_user, jwt_required
 
 from backend import db
-from backend.app_config import TELCORAIN_MAX_CALCS, TELCORAIN_OUT_PATH
+from backend.app_config import (
+    TELCORAIN_MAX_CALCS,
+    TELCORAIN_OUT_PATH,
+    TELCORAIN_OUT_PATH_JSON,
+)
 from backend.db_models import CalcStatus, Calculation
 from backend.tasks import run_rain_calculation
 from backend.utils import extract_timestamp, parse_isoformat_z
@@ -75,6 +79,7 @@ def start_rain_calculation():
         "user_info": {
             "links_id": payload["links_id"],
             "output_dir": f"{TELCORAIN_OUT_PATH}/{user_id}/{data['name']}",
+            "output_dir_json": f"{TELCORAIN_OUT_PATH_JSON}/{user_id}/{data['name']}",
         },
         "wet_dry": {
             "is_mlp_enabled": data["is_mlp_enabled"],

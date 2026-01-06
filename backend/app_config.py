@@ -35,6 +35,7 @@ ORG = config["influxdb"]["org"]
 TELCORAIN_REPO_PATH = config["telcorain"]["telcorain_repo_path"]
 TELCORAIN_ENV_PATH = config["telcorain"]["telcorain_env_path"]
 TELCORAIN_OUT_PATH = config["telcorain"]["telcorain_out_path"]
+TELCORAIN_OUT_PATH_JSON = config["telcorain"]["telcorain_out_path_json"]
 
 # active historic calculations limit for a single user
 TELCORAIN_MAX_CALCS = int(config["telcorain"]["telcorain_max_calcs"])
