@@ -29,21 +29,18 @@ def user_lookup_callback(_jwt_header, jwt_data):
 
 @auth.route("/api/login", methods=["POST"])
 def login():
-    data = request.get_json()
-    if not data or "username" not in data or "password" not in data:
+    data = request.get_json(silent=True) or {}
+    username = data.get("username")
+    password = data.get("password")
+    if not username or not password:
         return jsonify({"message": "Missing credentials"}), 400
-    username = data["username"]
-    password = data["password"]
     user = User.query.filter_by(username=username).one_or_none()
-    if user and bcrypt.check_password_hash(user.password, password):
-        access_token = create_access_token(identity=user)
-        response = jsonify({"message": "Login successful"})
-        set_access_cookies(response, access_token)
-        return response
-    elif user:
-        return jsonify({"message": "Wrong password"}), 401
-    else:
-        return jsonify({"message": "User does not exist"}), 404
+    if not user or not bcrypt.check_password_hash(user.password, password):
+        return jsonify({"message": "Invalid credentials"}), 401
+    access_token = create_access_token(identity=user)
+    response = jsonify({"message": "Login successful"})
+    set_access_cookies(response, access_token)
+    return response
 
 
 @auth.route("/api/login-check", methods=["GET"])

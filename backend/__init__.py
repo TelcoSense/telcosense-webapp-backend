@@ -60,6 +60,9 @@ def create_app():
         try:
             # only refresh if the current request had a valid JWT
             _ = get_jwt()  # Will raise RuntimeError if no valid JWT in request
+            # app.logger.warning(
+            #     f"REFRESH ran on {request.path}, sub={jwt_data.get('sub')}"
+            # )
             # skip refresh for specific paths if desired
             if request.path == "/api/login-check":
                 return response
