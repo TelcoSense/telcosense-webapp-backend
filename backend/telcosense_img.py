@@ -8,7 +8,7 @@ from backend.app_config import TELCOSENSE_IMG_API
 
 telcosense_img = Blueprint("telcosense_img", __name__)
 
-ALLOWED_DATATYPES = {"raincz", "tempcz", "tempchmi"}
+ALLOWED_DATATYPES = {"raincz", "rainsum", "tempcz", "tempchmi"}
 
 
 def _validate_datatype(datatype: str) -> str:

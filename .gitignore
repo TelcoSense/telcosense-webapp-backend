@@ -6,4 +6,8 @@ telcorain/
 telcorain_json/
 crd/
 
+intensities/
+intensities_json/
+sum/
+sum_json/
 *.pyc
