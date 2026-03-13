@@ -87,6 +87,18 @@ def proxy_maxz_file(filename):
     return _proxy_file("/api/maxz/", filename)
 
 
+@chmi_img.route("/api/pseudocappi2km/list")
+# @jwt_required()
+def proxy_pseudocappi2km_list():
+    return _proxy_list("/api/pseudocappi2km/list")
+
+
+@chmi_img.route("/api/pseudocappi2km/<path:filename>")
+# @jwt_required()
+def proxy_pseudocappi2km_file(filename):
+    return _proxy_file("/api/pseudocappi2km/", filename)
+
+
 @chmi_img.route("/api/merge1h/list")
 # @jwt_required()
 def proxy_merge1h_list():

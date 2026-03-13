@@ -18,6 +18,10 @@ auth = Blueprint("auth", __name__)
 
 @jwt.user_identity_loader
 def user_identity_lookup(user):
+    if user is None:
+        return None
+    if isinstance(user, (str, int)):
+        return str(user)
     return str(user.id)
 
 

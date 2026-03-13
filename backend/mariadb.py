@@ -61,22 +61,25 @@ def midpoint_xy(x1, y1, x2, y2):
 
 
 @mariadb.route("/api/links", methods=["GET"])
-@jwt_required()
+@jwt_required(optional=True)
 def links():
-    query = (
-        select(Link)
-        .options(
-            selectinload(Link.site_A),
-            selectinload(Link.site_B),
-            selectinload(Link.technology),
+    user: User | None = current_user
+
+    # Logged in user with link access -> return full link data
+    if user and user.link_access:
+        query = (
+            select(Link)
+            .options(
+                selectinload(Link.site_A),
+                selectinload(Link.site_B),
+                selectinload(Link.technology).selectinload(Technology.influx_mapping),
+            )
+            .join(Link.technology)
+            .where(Technology.influx_mapping_id.is_not(None))
         )
-        .join(Link.technology)
-        .where(Technology.influx_mapping_id.is_not(None))
-    )
-    user: User = current_user
-    # user must have an access to links
-    if user.link_access:
+
         links = db.session.execute(query).scalars().all()
+
         return jsonify(
             [
                 {
@@ -117,6 +120,31 @@ def links():
                 for link in links
             ]
         )
-    else:
-        # otherwise return empty list
-        return jsonify([])
+
+    # Anonymous or user without link access -> return only id + midpoint
+    query = (
+        select(Link)
+        .options(
+            selectinload(Link.site_A),
+            selectinload(Link.site_B),
+        )
+        .join(Link.technology)
+        .where(Technology.influx_mapping_id.is_not(None))
+    )
+
+    links = db.session.execute(query).scalars().all()
+
+    return jsonify(
+        [
+            {
+                "id": link.id,
+                "center_x": round(
+                    (link.site_A.x_coordinate + link.site_B.x_coordinate) / 2, 7
+                ),
+                "center_y": round(
+                    (link.site_A.y_coordinate + link.site_B.y_coordinate) / 2, 7
+                ),
+            }
+            for link in links
+        ]
+    )

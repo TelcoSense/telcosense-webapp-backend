@@ -6,8 +6,8 @@ from flask_cors import CORS
 from flask_jwt_extended import (
     JWTManager,
     create_access_token,
-    current_user,
     get_jwt,
+    get_jwt_identity,
     set_access_cookies,
 )
 from flask_migrate import Migrate
@@ -58,22 +58,27 @@ def create_app():
     @app.after_request
     def refresh_expiring_jwts(response):
         try:
-            # only refresh if the current request had a valid JWT
-            _ = get_jwt()  # Will raise RuntimeError if no valid JWT in request
-            # app.logger.warning(
-            #     f"REFRESH ran on {request.path}, sub={jwt_data.get('sub')}"
-            # )
-            # skip refresh for specific paths if desired
+            # raises RuntimeError if there is no valid JWT in request
+            jwt_data = get_jwt()
+
             if request.path == "/api/login-check":
                 return response
-            # always refresh: issue a new token that expires in 30 minutes from now
+
+            identity = get_jwt_identity()
+
+            # no authenticated identity present
+            if identity is None:
+                return response
+
             access_token = create_access_token(
-                identity=current_user, expires_delta=timedelta(minutes=30)
+                identity=identity,
+                expires_delta=timedelta(minutes=30),
             )
             set_access_cookies(response, access_token)
+
         except (RuntimeError, KeyError):
-            # no valid JWT present, skip refreshing
             pass
+
         return response
 
     return app, celery
