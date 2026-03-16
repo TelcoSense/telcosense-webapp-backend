@@ -1,11 +1,10 @@
-from time import time as timer
-
 import numpy as np
-import pandas as pd
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required
 from influxdb_client import InfluxDBClient
+from sqlalchemy import select
 
+from backend import db
 from backend.app_config import (
     ORG,
     TOKEN_INTERNAL_READ,
@@ -13,6 +12,7 @@ from backend.app_config import (
     URL_INTERNAL,
     URL_PUBLIC,
 )
+from backend.db_models_cml import Link
 
 influxdb = Blueprint("influxb", __name__)
 
@@ -311,6 +311,84 @@ def cml_data():
             result["trsl_b"] = [None if np.isnan(x) else float(x) for x in trsl_b]
             result["time"] = time
         return jsonify(result)
+    except Exception as e:
+        print(e)
+        return jsonify({"error": str(e)}), 500
+
+
+@influxdb.route("/api/cmldatapublic", methods=["POST"])
+@jwt_required(optional=True)
+def cml_data_public():
+    data = request.get_json() or {}
+    start = data.get("start")
+    stop = data.get("stop")
+    cml_id = data.get("cmlId")
+
+    if not start or not stop or not cml_id:
+        return jsonify({"error": "Missing start, stop, or cmlId"}), 400
+
+    link_exists = db.session.execute(
+        select(Link.id).where(Link.id == cml_id)
+    ).scalar_one_or_none()
+
+    if link_exists is None:
+        return jsonify({"error": f"Link with id {cml_id} not found"}), 404
+
+    rain_intensity_query = f"""
+        from(bucket: "telcorain_output")
+        |> range(start: {start}, stop: {stop})
+        |> filter(fn: (r) => r["_measurement"] == "telcorain")
+        |> filter(fn: (r) => r["_field"] == "rain_intensity")
+        |> filter(fn: (r) => r["cml_id"] == "{cml_id}")
+    """.strip()
+
+    temp_pred_query = f"""
+        from(bucket: "telcorain_output")
+        |> range(start: {start}, stop: {stop})
+        |> filter(fn: (r) => r["_measurement"] == "telcotemp")
+        |> filter(fn: (r) => r["_field"] == "temperature")
+        |> filter(fn: (r) => r["cml_id"] == "{cml_id}")
+        |> filter(fn: (r) => r["side"] == "A" or r["side"] == "B")
+        |> pivot(rowKey: ["_time"], columnKey: ["side"], valueColumn: "_value")
+    """.strip()
+
+    try:
+        result = {
+            "rain_intensity": [],
+            "rain_intensity_time": [],
+            "temp_pred_a": [],
+            "temp_pred_b": [],
+            "temp_pred_time": [],
+        }
+
+        tables = client_internal.query_api().query(rain_intensity_query)
+        for table in tables:
+            for record in table.records:
+                result["rain_intensity"].append(
+                    round(record.get_value(), 1)
+                    if record.get_value() is not None
+                    else None
+                )
+                result["rain_intensity_time"].append(record.get_time().isoformat())
+
+        df = client_internal.query_api().query_data_frame(temp_pred_query)
+        if df is not None and not df.empty:
+            result["temp_pred_time"] = [t.isoformat() for t in df["_time"]]
+
+            result["temp_pred_a"] = (
+                [None if v is None else float(round(v, 1)) for v in df["A"]]
+                if "A" in df.columns
+                else []
+            )
+
+            result["temp_pred_b"] = (
+                [None if v is None else float(round(v, 1)) for v in df["B"]]
+                if "B" in df.columns
+                else []
+            )
+
+        return jsonify(result)
+
     except Exception as e:
         print(e)
         return jsonify({"error": str(e)}), 500
