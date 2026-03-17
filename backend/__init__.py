@@ -1,11 +1,8 @@
-from datetime import timedelta
-
 from flask import Flask, request
 from flask_bcrypt import Bcrypt
 from flask_cors import CORS
 from flask_jwt_extended import (
     JWTManager,
-    create_access_token,
     get_jwt,
     get_jwt_identity,
     set_access_cookies,
@@ -14,6 +11,14 @@ from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
 
 from backend.app_config import Config
+from backend.auth_utils import (
+    SESSION_EXP_CLAIM,
+    SESSION_ID_CLAIM,
+    create_session_access_token,
+    get_session_expires_at,
+    should_refresh_token,
+    utc_now,
+)
 from backend.celery_utils import make_celery
 
 db = SQLAlchemy()
@@ -34,6 +39,7 @@ def create_app():
         app,
         supports_credentials=True,
         origins=["http://127.0.0.1:3001"],
+        expose_headers=["X-Token-Expires", "X-Session-Expires"],
     )
     # db migrations
     migrate.init_app(app, db)
@@ -61,7 +67,7 @@ def create_app():
             # raises RuntimeError if there is no valid JWT in request
             jwt_data = get_jwt()
 
-            if request.path == "/api/login-check":
+            if request.path in {"/api/login-check", "/api/token-info", "/api/logout"}:
                 return response
 
             identity = get_jwt_identity()
@@ -70,11 +76,28 @@ def create_app():
             if identity is None:
                 return response
 
-            access_token = create_access_token(
+            session_expires_at = get_session_expires_at(jwt_data)
+            if session_expires_at is None or session_expires_at <= utc_now():
+                return response
+
+            response.headers["X-Token-Expires"] = str(jwt_data["exp"])
+            response.headers["X-Session-Expires"] = str(jwt_data[SESSION_EXP_CLAIM])
+
+            if not should_refresh_token(jwt_data):
+                return response
+
+            from backend.auth import revoke_token
+
+            revoke_token(jwt_data=jwt_data, reason="rotated", revoke_session=False)
+            access_token, access_exp, session_exp, _session_id = create_session_access_token(
                 identity=identity,
-                expires_delta=timedelta(minutes=30),
+                fresh=False,
+                session_id=jwt_data.get(SESSION_ID_CLAIM),
+                session_expires_at=session_expires_at,
             )
             set_access_cookies(response, access_token)
+            response.headers["X-Token-Expires"] = str(access_exp)
+            response.headers["X-Session-Expires"] = str(session_exp)
 
         except (RuntimeError, KeyError):
             pass

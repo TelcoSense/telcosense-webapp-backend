@@ -50,8 +50,12 @@ class Config:
     SQLALCHEMY_DATABASE_URI = DB_CONNECTION_STRING
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     JWT_SECRET_KEY = config["auth"]["jwt_secret_key"]
-    JWT_ACCESS_TOKEN_EXPIRES = timedelta(minutes=30)
+    JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=1)
+    JWT_SESSION_REFRESH_THRESHOLD = timedelta(minutes=15)
+    JWT_SESSION_ABSOLUTE_EXPIRES = timedelta(days=14)
     JWT_COOKIE_CSRF_PROTECT = True
     JWT_TOKEN_LOCATION = "cookies"
-    JWT_COOKIE_SECURE = True
+    JWT_COOKIE_SECURE = config["auth"].getboolean("jwt_cookie_secure", fallback=True)
+    JWT_COOKIE_SAMESITE = config["auth"].get("jwt_cookie_samesite", fallback="Lax")
+    JWT_ACCESS_COOKIE_PATH = "/api/"
     SQLALCHEMY_BINDS = {"ws": DB_CONNECTION_STRING_WS, "cml": DB_CONNECTION_STRING_CML}

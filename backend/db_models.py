@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from enum import Enum
 
-from sqlalchemy import Boolean, DateTime
+from sqlalchemy import Boolean, CheckConstraint, DateTime
 from sqlalchemy import Enum as SqlEnum
 from sqlalchemy import Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -35,6 +35,9 @@ class User(db.Model):
     calculations: Mapped[list["Calculation"]] = relationship(
         "Calculation", back_populates="user", cascade="all, delete-orphan"
     )
+    revoked_tokens: Mapped[list["AuthBlocklist"]] = relationship(
+        "AuthBlocklist", back_populates="user"
+    )
 
 
 class CalcStatus(Enum):
@@ -66,3 +69,36 @@ class Calculation(db.Model):
 
     user: Mapped["User"] = relationship("User", back_populates="calculations")
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+
+
+class AuthBlocklist(db.Model):
+    __tablename__ = "auth_blocklist"
+    __table_args__ = (
+        CheckConstraint(
+            "jti IS NOT NULL OR session_id IS NOT NULL",
+            name="ck_auth_blocklist_target_present",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    jti: Mapped[str | None] = mapped_column(
+        String(36), unique=True, nullable=True, index=True
+    )
+    session_id: Mapped[str | None] = mapped_column(
+        String(36), nullable=True, index=True
+    )
+    user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True, index=True
+    )
+    token_type: Mapped[str] = mapped_column(String(16), nullable=False, default="access")
+    revoked_reason: Mapped[str] = mapped_column(
+        String(255), nullable=False, default="manual"
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
+    )
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, index=True
+    )
+
+    user: Mapped["User | None"] = relationship("User", back_populates="revoked_tokens")

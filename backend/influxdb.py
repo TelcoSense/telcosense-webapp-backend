@@ -28,7 +28,8 @@ client_internal_activity = InfluxDBClient(
     org=ORG,
     timeout=30_000,
 )
-ACTIVITY_PROBE_MINUTES = 1
+RAIN_ACTIVITY_PROBE_MINUTES = 30
+TEMP_ACTIVITY_PROBE_MINUTES = 120
 
 
 def _flux_string(value: str) -> str:
@@ -178,19 +179,23 @@ def cml_data():
         # temp pred
 
         df = client_internal.query_api().query_data_frame(temp_pred_query)
-        if not df.empty:
+        if df is not None and not df.empty:
             result["temp_pred_time"] = [t.isoformat() for t in df["_time"]]
-            result["temp_pred_a"] = [
-                float(round(v, 1)) if v is not None else None for v in df["A"]
-            ]
-            result["temp_pred_b"] = [
-                float(round(v, 1)) if v is not None else None for v in df["B"]
-            ]
+            result["temp_pred_a"] = (
+                [None if v is None else float(round(v, 1)) for v in df["A"]]
+                if "A" in df.columns
+                else []
+            )
+            result["temp_pred_b"] = (
+                [None if v is None else float(round(v, 1)) for v in df["B"]]
+                if "B" in df.columns
+                else []
+            )
 
         # tsl and rsl second
         tables = client_internal.query_api().query(trsl_query)
         # summit (only rsl is used and since it is positive it is considered as trsl)
-        if tech == "summit" or tech == "summit_bt" and len(tables) == 2:
+        if tech in {"summit", "summit_bt"}:
             trsl_a = []
             trsl_b = []
             result["time"] = []
@@ -437,9 +442,12 @@ def cml_activity():
     start = data.get("start") or request.args.get("start")
     stop = data.get("end") or request.args.get("end")
     link_ids = data.get("linkIds")
+    activity_type = (data.get("activityType") or request.args.get("activityType") or "rain").strip().lower()
 
     if not start or not stop:
         return jsonify({"error": "Missing start or end"}), 400
+    if activity_type not in {"rain", "temp"}:
+        return jsonify({"error": "Invalid activityType"}), 400
 
     stop_dt = _parse_iso_datetime(stop)
     if stop_dt is None:
@@ -449,8 +457,16 @@ def cml_activity():
     if start_dt is None:
         return jsonify({"error": "Invalid start timestamp"}), 400
 
+    probe_minutes = (
+        RAIN_ACTIVITY_PROBE_MINUTES
+        if activity_type == "rain"
+        else TEMP_ACTIVITY_PROBE_MINUTES
+    )
     probe_stop_dt = stop_dt
-    probe_start_dt = max(start_dt, stop_dt - timedelta(minutes=ACTIVITY_PROBE_MINUTES))
+    probe_start_dt = max(
+        start_dt,
+        stop_dt - timedelta(minutes=probe_minutes),
+    )
     probe_start = probe_start_dt.isoformat().replace("+00:00", "Z")
     probe_stop = probe_stop_dt.isoformat().replace("+00:00", "Z")
 
@@ -464,70 +480,59 @@ def cml_activity():
         query = query.where(Link.id.in_(link_ids))
     links = db.session.execute(query).scalars().all()
 
-    grouped_links: dict[tuple[str, str], list[Link]] = {}
-    for link in links:
-        mapping = link.technology.influx_mapping
-        if mapping is None:
-            continue
+    link_ids_as_text = {str(link.id) for link in links}
 
-        measurement = mapping.measurement
-        temp_field = mapping.temperature_field or "Teplota"
-        key = (measurement, temp_field)
-        grouped_links.setdefault(key, []).append(link)
-
-    active_hosts_by_group: dict[tuple[str, str], set[str]] = {}
+    if activity_type == "rain":
+        measurement = "telcorain"
+        field = "rain_intensity"
+    else:
+        measurement = "telcotemp"
+        field = "temperature"
 
     try:
-        for (measurement, temp_field), grouped in grouped_links.items():
-            hosts = sorted(
+        if not link_ids_as_text:
+            return jsonify(
                 {
-                    host
-                    for link in grouped
-                    for host in (link.ip_address_A, link.ip_address_B)
-                    if host
+                    "activity": {},
+                    "summary": {
+                        "total": 0,
+                        "active": 0,
+                        "inactive": 0,
+                        "groups": 0,
+                        "probe_start": probe_start,
+                        "probe_stop": probe_stop,
+                        "activity_type": activity_type,
+                    },
                 }
             )
-            if not hosts:
-                active_hosts_by_group[(measurement, temp_field)] = set()
-                continue
 
-            flux_query = f"""
-                import "influxdata/influxdb/schema"
+        flux_query = f"""
+            from(bucket: "telcorain_output")
+            |> range(start: {probe_start}, stop: {probe_stop})
+            |> filter(fn: (r) => r["_measurement"] == "{_flux_string(measurement)}")
+            |> filter(fn: (r) => r["_field"] == "{_flux_string(field)}")
+            |> keep(columns: ["cml_id", "_time"])
+        """.strip()
 
-                schema.tagValues(
-                    bucket: "realtime_cbl",
-                    tag: "agent_host",
-                    predicate: (r) => r["_measurement"] == "{_flux_string(measurement)}" and r["_field"] == "{_flux_string(temp_field)}",
-                    start: {probe_start},
-                    stop: {probe_stop},
-                )
-            """.strip()
-
-            tables = client_internal_activity.query_api().query(flux_query)
-            active_hosts = {
-                record.get_value()
-                for table in tables
-                for record in table.records
-                if record.get_value() in hosts
-            }
-            active_hosts_by_group[(measurement, temp_field)] = active_hosts
+        tables = client_internal_activity.query_api().query(flux_query)
+        active_link_ids = {
+            record.values.get("cml_id")
+            for table in tables
+            for record in table.records
+            if record.values.get("cml_id") in link_ids_as_text
+        }
 
         activity = {}
         active_count = 0
         inactive_count = 0
 
-        for (measurement, temp_field), grouped in grouped_links.items():
-            active_hosts = active_hosts_by_group.get((measurement, temp_field), set())
-            for link in grouped:
-                is_active = bool(
-                    (link.ip_address_A and link.ip_address_A in active_hosts)
-                    or (link.ip_address_B and link.ip_address_B in active_hosts)
-                )
-                activity[str(link.id)] = is_active
-                if is_active:
-                    active_count += 1
-                else:
-                    inactive_count += 1
+        for link in links:
+            is_active = str(link.id) in active_link_ids
+            activity[str(link.id)] = is_active
+            if is_active:
+                active_count += 1
+            else:
+                inactive_count += 1
 
         return jsonify(
             {
@@ -536,9 +541,10 @@ def cml_activity():
                     "total": len(activity),
                     "active": active_count,
                     "inactive": inactive_count,
-                    "groups": len(grouped_links),
+                    "groups": 1,
                     "probe_start": probe_start,
                     "probe_stop": probe_stop,
+                    "activity_type": activity_type,
                 },
             }
         )
