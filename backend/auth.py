@@ -56,6 +56,7 @@ def login_check():
             "valid": True,
             "username": current_user.username,
             "org": current_user.org,
+            "link_access_type": current_user.link_access_type.value,
             "exp": jwt_data["exp"],
         }
     )

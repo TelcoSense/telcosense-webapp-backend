@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from backend import db
-from backend.db_models import User
+from backend.db_models import LinkAccessType, User
 from backend.db_models_cml import Link, Technology
 from backend.db_models_ws import WeatherStation, WeatherStationMeasurement10M
 
@@ -65,8 +65,11 @@ def midpoint_xy(x1, y1, x2, y2):
 def links():
     user: User | None = current_user
 
-    # Logged in user with link access -> return full link data
-    if user and user.link_access:
+    if not user:
+        return jsonify([])
+
+    # Logged in user with full link access -> return full link data
+    if user.link_access and user.link_access_type == LinkAccessType.FULL:
         query = (
             select(Link)
             .options(
@@ -121,7 +124,7 @@ def links():
             ]
         )
 
-    # Anonymous or user without link access -> return only id + midpoint
+    # Logged in users without full link access -> return only id + midpoint
     query = (
         select(Link)
         .options(

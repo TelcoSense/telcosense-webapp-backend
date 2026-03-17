@@ -1,8 +1,11 @@
+from datetime import datetime, timedelta, timezone
+
 import numpy as np
 from flask import Blueprint, jsonify, request
-from flask_jwt_extended import jwt_required
+from flask_jwt_extended import current_user, jwt_required
 from influxdb_client import InfluxDBClient
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from backend import db
 from backend.app_config import (
@@ -12,12 +15,35 @@ from backend.app_config import (
     URL_INTERNAL,
     URL_PUBLIC,
 )
-from backend.db_models_cml import Link
+from backend.db_models import LinkAccessType, User
+from backend.db_models_cml import Link, Technology
 
 influxdb = Blueprint("influxb", __name__)
 
 client_public = InfluxDBClient(url=URL_PUBLIC, token=TOKEN_PUBLIC_READ, org=ORG)
 client_internal = InfluxDBClient(url=URL_INTERNAL, token=TOKEN_INTERNAL_READ, org=ORG)
+client_internal_activity = InfluxDBClient(
+    url=URL_INTERNAL,
+    token=TOKEN_INTERNAL_READ,
+    org=ORG,
+    timeout=30_000,
+)
+ACTIVITY_PROBE_MINUTES = 1
+
+
+def _flux_string(value: str) -> str:
+    return value.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def _parse_iso_datetime(value: str) -> datetime | None:
+    try:
+        normalized = value.replace("Z", "+00:00")
+        dt = datetime.fromisoformat(normalized)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc)
+    except ValueError:
+        return None
 
 
 @influxdb.route("/api/wsdata", methods=["POST"])
@@ -317,8 +343,18 @@ def cml_data():
 
 
 @influxdb.route("/api/cmldatapublic", methods=["POST"])
-@jwt_required(optional=True)
+@jwt_required()
 def cml_data_public():
+    user: User = current_user
+
+    if user.link_access_type != LinkAccessType.BASIC:
+        return (
+            jsonify(
+                {"error": "Public CML data is only available for BASIC link access"}
+            ),
+            403,
+        )
+
     data = request.get_json() or {}
     start = data.get("start")
     stop = data.get("stop")
@@ -389,6 +425,123 @@ def cml_data_public():
 
         return jsonify(result)
 
+    except Exception as e:
+        print(e)
+        return jsonify({"error": str(e)}), 500
+
+
+@influxdb.route("/api/cml-activity", methods=["GET", "POST"])
+@jwt_required()
+def cml_activity():
+    data = request.get_json(silent=True) or {}
+    start = data.get("start") or request.args.get("start")
+    stop = data.get("end") or request.args.get("end")
+    link_ids = data.get("linkIds")
+
+    if not start or not stop:
+        return jsonify({"error": "Missing start or end"}), 400
+
+    stop_dt = _parse_iso_datetime(stop)
+    if stop_dt is None:
+        return jsonify({"error": "Invalid end timestamp"}), 400
+
+    start_dt = _parse_iso_datetime(start)
+    if start_dt is None:
+        return jsonify({"error": "Invalid start timestamp"}), 400
+
+    probe_stop_dt = stop_dt
+    probe_start_dt = max(start_dt, stop_dt - timedelta(minutes=ACTIVITY_PROBE_MINUTES))
+    probe_start = probe_start_dt.isoformat().replace("+00:00", "Z")
+    probe_stop = probe_stop_dt.isoformat().replace("+00:00", "Z")
+
+    query = (
+        select(Link)
+        .options(selectinload(Link.technology).selectinload(Technology.influx_mapping))
+        .join(Link.technology)
+        .where(Technology.influx_mapping_id.is_not(None))
+    )
+    if link_ids:
+        query = query.where(Link.id.in_(link_ids))
+    links = db.session.execute(query).scalars().all()
+
+    grouped_links: dict[tuple[str, str], list[Link]] = {}
+    for link in links:
+        mapping = link.technology.influx_mapping
+        if mapping is None:
+            continue
+
+        measurement = mapping.measurement
+        temp_field = mapping.temperature_field or "Teplota"
+        key = (measurement, temp_field)
+        grouped_links.setdefault(key, []).append(link)
+
+    active_hosts_by_group: dict[tuple[str, str], set[str]] = {}
+
+    try:
+        for (measurement, temp_field), grouped in grouped_links.items():
+            hosts = sorted(
+                {
+                    host
+                    for link in grouped
+                    for host in (link.ip_address_A, link.ip_address_B)
+                    if host
+                }
+            )
+            if not hosts:
+                active_hosts_by_group[(measurement, temp_field)] = set()
+                continue
+
+            flux_query = f"""
+                import "influxdata/influxdb/schema"
+
+                schema.tagValues(
+                    bucket: "realtime_cbl",
+                    tag: "agent_host",
+                    predicate: (r) => r["_measurement"] == "{_flux_string(measurement)}" and r["_field"] == "{_flux_string(temp_field)}",
+                    start: {probe_start},
+                    stop: {probe_stop},
+                )
+            """.strip()
+
+            tables = client_internal_activity.query_api().query(flux_query)
+            active_hosts = {
+                record.get_value()
+                for table in tables
+                for record in table.records
+                if record.get_value() in hosts
+            }
+            active_hosts_by_group[(measurement, temp_field)] = active_hosts
+
+        activity = {}
+        active_count = 0
+        inactive_count = 0
+
+        for (measurement, temp_field), grouped in grouped_links.items():
+            active_hosts = active_hosts_by_group.get((measurement, temp_field), set())
+            for link in grouped:
+                is_active = bool(
+                    (link.ip_address_A and link.ip_address_A in active_hosts)
+                    or (link.ip_address_B and link.ip_address_B in active_hosts)
+                )
+                activity[str(link.id)] = is_active
+                if is_active:
+                    active_count += 1
+                else:
+                    inactive_count += 1
+
+        return jsonify(
+            {
+                "activity": activity,
+                "summary": {
+                    "total": len(activity),
+                    "active": active_count,
+                    "inactive": inactive_count,
+                    "groups": len(grouped_links),
+                    "probe_start": probe_start,
+                    "probe_stop": probe_stop,
+                },
+            }
+        )
     except Exception as e:
         print(e)
         return jsonify({"error": str(e)}), 500

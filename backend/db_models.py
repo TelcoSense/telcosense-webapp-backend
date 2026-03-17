@@ -9,6 +9,11 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from backend import db
 
 
+class LinkAccessType(Enum):
+    BASIC = "basic"
+    FULL = "full"
+
+
 class User(db.Model):
     __tablename__ = "users"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -18,6 +23,11 @@ class User(db.Model):
     org: Mapped[str] = mapped_column(String(10), nullable=False, default="BUT")
 
     link_access: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    link_access_type: Mapped[LinkAccessType] = mapped_column(
+        SqlEnum(LinkAccessType),
+        nullable=False,
+        default=LinkAccessType.FULL,
+    )
     calculation_access: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False
     )
