@@ -23,6 +23,7 @@ class User(db.Model):
     org: Mapped[str] = mapped_column(String(10), nullable=False, default="BUT")
 
     link_access: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
     link_access_type: Mapped[LinkAccessType] = mapped_column(
         SqlEnum(LinkAccessType),
         nullable=False,
@@ -31,6 +32,7 @@ class User(db.Model):
     calculation_access: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False
     )
+    is_admin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     calculations: Mapped[list["Calculation"]] = relationship(
         "Calculation", back_populates="user", cascade="all, delete-orphan"
@@ -82,7 +84,7 @@ class AuthBlocklist(db.Model):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     jti: Mapped[str | None] = mapped_column(
-        String(36), unique=True, nullable=True, index=True
+        String(36), unique=True, nullable=True
     )
     session_id: Mapped[str | None] = mapped_column(
         String(36), nullable=True, index=True
@@ -90,12 +92,16 @@ class AuthBlocklist(db.Model):
     user_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id"), nullable=True, index=True
     )
-    token_type: Mapped[str] = mapped_column(String(16), nullable=False, default="access")
+    token_type: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="access"
+    )
     revoked_reason: Mapped[str] = mapped_column(
         String(255), nullable=False, default="manual"
     )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
     )
     expires_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, index=True
